@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.new_math_ops.compare import compare_metrics
+from src.new_math_ops_adapter.compare import compare_metrics
 
 
 def test_compare_metrics_computes_expected_deltas():

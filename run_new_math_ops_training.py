@@ -20,9 +20,48 @@ def main() -> None:
     import art
     from art.local.backend import LocalBackend
 
-    from src.new_math_ops.dataset import default_dataset_path, load_train_val_rows
-    from src.new_math_ops.prompts import PROMPT_VERSION, build_messages
-    from src.new_math_ops.reward import reward_from_choice
+    from new_math_ops import (
+        DatasetRow,
+        PROMPT_VERSION,
+        build_messages,
+        load_dataset_rows,
+        parse_final_answer,
+    )
+
+    from src.new_math_ops_adapter.dataset import split_train_val
+
+    def default_dataset_path() -> Path:
+        return (
+            Path(__file__).resolve().parents[2]
+            / "benchmarks"
+            / "new_math_ops"
+            / "data"
+            / "new_math_ops_v7_10000"
+            / "dataset.jsonl"
+        )
+
+    def extract_choice_text(choice: object) -> str:
+        message = getattr(choice, "message", choice)
+
+        if isinstance(message, dict):
+            content = message.get("content", "")
+        else:
+            content = getattr(message, "content", "")
+
+        if isinstance(content, str):
+            return content.strip()
+
+        if isinstance(content, list):
+            parts: list[str] = []
+            for part in content:
+                if isinstance(part, dict):
+                    text = part.get("text", "")
+                else:
+                    text = getattr(part, "text", "")
+                parts.append(str(text))
+            return "".join(parts).strip()
+
+        return str(content).strip()
 
     parser = argparse.ArgumentParser(description="Train ART on New Math Ops")
     parser.add_argument("--dataset", type=Path, default=default_dataset_path())
@@ -58,7 +97,7 @@ def main() -> None:
 
     async def rollout(
         model: "art.TrainableModel",
-        sample: dict,
+        sample: DatasetRow,
     ) -> "art.Trajectory":
         async with semaphore:
             client = model.openai_client()
@@ -73,7 +112,9 @@ def main() -> None:
             )
 
             choice = response.choices[0]
-            reward, _, _, _ = reward_from_choice(choice, sample["expected_output"])
+            raw_response = extract_choice_text(choice)
+            predicted_output = parse_final_answer(raw_response)
+            reward = 1.0 if predicted_output == sample["expected_output"] else 0.0
 
             trajectory = art.Trajectory(
                 messages_and_choices=[
@@ -86,11 +127,11 @@ def main() -> None:
             return trajectory
 
     async def run() -> None:
-        train_rows, val_rows = load_train_val_rows(
-            args.dataset,
+        rows = load_dataset_rows(args.dataset, args.dataset_limit)
+        train_rows, val_rows = split_train_val(
+            rows,
             train_ratio=args.train_ratio,
             seed=args.split_seed,
-            limit=args.dataset_limit,
         )
         if not train_rows:
             raise ValueError("no training rows loaded")

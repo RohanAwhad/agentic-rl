@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.new_math_ops.compare import compare_metrics
+from src.new_math_ops_adapter.compare import compare_metrics
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -8,12 +8,51 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from new_math_ops import (
+    ChatMessage,
+    PROMPT_VERSION,
+    evaluate_dataset_rows,
+    load_dataset_rows,
+    write_run_artifacts,
+)
 from openai import AsyncOpenAI
 
-from src.new_math_ops.dataset import default_dataset_path, load_train_val_rows
-from src.new_math_ops.eval import evaluate_dataset_rows, write_run_artifacts
-from src.new_math_ops.prompts import ChatMessage, PROMPT_VERSION
-from src.new_math_ops.reward import extract_choice_text
+from src.new_math_ops_adapter.dataset import split_train_val
+
+
+def default_dataset_path() -> Path:
+    return (
+        Path(__file__).resolve().parents[2]
+        / "benchmarks"
+        / "new_math_ops"
+        / "data"
+        / "new_math_ops_v7_10000"
+        / "dataset.jsonl"
+    )
+
+
+def extract_choice_text(choice: object) -> str:
+    message = getattr(choice, "message", choice)
+
+    if isinstance(message, dict):
+        content = message.get("content", "")
+    else:
+        content = getattr(message, "content", "")
+
+    if isinstance(content, str):
+        return content.strip()
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, dict):
+                text = part.get("text", "")
+            else:
+                text = getattr(part, "text", "")
+            parts.append(str(text))
+        return "".join(parts).strip()
+
+    return str(content).strip()
 
 
 class OpenAICompletionClient:
@@ -41,11 +80,14 @@ class OpenAICompletionClient:
 
 
 async def run(args: argparse.Namespace) -> None:
-    train_rows, val_rows = load_train_val_rows(
+    rows = load_dataset_rows(
         args.dataset,
+        args.dataset_limit,
+    )
+    train_rows, val_rows = split_train_val(
+        rows,
         train_ratio=args.train_ratio,
         seed=args.split_seed,
-        limit=args.dataset_limit,
     )
 
     split_rows = train_rows if args.split == "train" else val_rows
