@@ -22,6 +22,9 @@ dependencies = [
 tau = ["tau2 @ git+https://github.com/amazon-agi/tau2-bench-verified"]
 art = ["openpipe-art"]
 agl = ["agentlightning[verl]"]
+new_math_ops = [
+    "new-math-ops @ git+https://github.com/RohanAwhad/new-math-mnist.git@bfc3424a3927fe7550efb61d7d8221319582ca63",
+]
 dev = ["pytest", "pytest-asyncio", "ruff"]
 
 [tool.setuptools.packages.find]
